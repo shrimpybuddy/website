@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>—</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <canvas id="grid"></canvas>
+  <script>
+    const canvas = document.getElementById('grid');
+    const ctx = canvas.getContext('2d');
+
+    const BANK     = 'OWENGRUNAU'.split('');
+    const FONT_SIZE = 96;
+    const FONT      = `${FONT_SIZE}px "Times New Roman"`;
+    const MIN_MS    = 2000;
+    const MAX_MS    = 10000;
+    const minHz = 150;
+    const maxHz = 1200;
+    const jitter = 0.7 + Math.random() * 1.5;
+
+    let cols, rows, grid, nextChange, cellW, cellH, offsetX, offsetY;
+
+    function rand()   { return BANK[Math.floor(Math.random() * BANK.length)]; }
+    function randMs() { return MIN_MS + Math.random() * (MAX_MS - MIN_MS); }
+
+    function measure() {
+      ctx.font = FONT;
+      // use the widest character in the bank as cell width
+      cellW = Math.max(...BANK.map(ch => ctx.measureText(ch).width)) + 8;
+      cellH = FONT_SIZE * 1.2;
+    }
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      measure();
+
+      cols = Math.ceil(canvas.width  / cellW);
+      rows = Math.ceil(canvas.height / cellH) + 2;
+
+      // centre the block
+      offsetX = (canvas.width  - cols * cellW) / 2 + cellH/2;
+      offsetY = (canvas.height - rows * cellH) / 2 + cellH/2;
+
+      const now = performance.now();
+      grid       = Array.from({ length: rows }, () => Array.from({ length: cols }, () => rand()));
+      nextChange = Array.from({ length: rows }, () => Array.from({ length: cols }, () => now + randMs()));
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle    = '#fff';
+      ctx.font         = FONT;
+      ctx.textBaseline = 'top';
+      for (let r = 0; r < rows; r++)
+        for (let c = 0; c < cols; c++)
+          ctx.fillText(grid[r][c], offsetX + c * cellW, offsetY + r * cellH);
+    }
+    const audio = new AudioContext();
+    document.addEventListener('click', () => audio.resume(), { once: true });
+
+    function beep(col, row) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      const pan  = audio.createStereoPanner();
+
+      osc.connect(gain);
+      gain.connect(pan);
+      pan.connect(audio.destination);
+
+      pan.pan.value = (col / cols) * 2 - 1;
+      osc.frequency.value = 200 + Math.random() * 500; // random pitch
+      //osc.frequency.value = minHz * Math.pow(maxHz / minHz, Math.pow(row / rows, 0.5)) * jitter;
+      gain.gain.setValueAtTime(0.08, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.1);
+      osc.start();
+      osc.stop(audio.currentTime + 0.1);
+}
+
+    function loop(now) {
+      let changed = false;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (now >= nextChange[r][c]) {
+            grid[r][c]       = rand();
+            nextChange[r][c] = now + randMs();
+            beep(c, r);
+            changed = true;
+          }
+        }
+      }
+      if (changed) draw();
+      requestAnimationFrame(loop);
+    }
+
+    resize();
+    window.addEventListener('resize', resize);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
