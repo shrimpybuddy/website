@@ -11,28 +11,34 @@
   </style>
 </head>
 <body>
+  <div id="overlay" style="
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 10;
+    background: #000;
+  ">
+    <span style="color: #fff; font: 300 13px 'Times New Roman'; letter-spacing: 0.2em;">CLICK</span>
+  </div>
+
   <canvas id="grid"></canvas>
   <script>
     const canvas = document.getElementById('grid');
     const ctx = canvas.getContext('2d');
 
-    const BANK     = 'OWENGRUNAU'.split('');
-    const FONT_SIZE = 96;
-    const FONT      = `${FONT_SIZE}px "Times New Roman"`;
-    const MIN_MS    = 2000;
-    const MAX_MS    = 10000;
-    const minHz = 150;
-    const maxHz = 1200;
-    const jitter = 0.7 + Math.random() * 1.5;
+    const BANK   = 'OWENGRUNAU'.split('');
+    const MIN_MS = 2000;
+    const MAX_MS = 10000;
+    const minHz  = 150;
+    const maxHz  = 1200;
 
-    let cols, rows, grid, nextChange, cellW, cellH, offsetX, offsetY;
+    let FONT_SIZE, FONT, cellW, cellH;
+    let cols, rows, grid, nextChange, offsetX, offsetY;
 
     function rand()   { return BANK[Math.floor(Math.random() * BANK.length)]; }
     function randMs() { return MIN_MS + Math.random() * (MAX_MS - MIN_MS); }
 
     function measure() {
       ctx.font = FONT;
-      // use the widest character in the bank as cell width
       cellW = Math.max(...BANK.map(ch => ctx.measureText(ch).width)) + 8;
       cellH = FONT_SIZE * 1.2;
     }
@@ -40,15 +46,13 @@
     function resize() {
       canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
+      FONT_SIZE = Math.max(32, Math.min(96, window.innerWidth / 8));
+      FONT      = `${FONT_SIZE}px "Times New Roman"`;
       measure();
-
       cols = Math.ceil(canvas.width  / cellW);
       rows = Math.ceil(canvas.height / cellH) + 2;
-
-      // centre the block
-      offsetX = (canvas.width  - cols * cellW) / 2 + cellH/2;
-      offsetY = (canvas.height - rows * cellH) / 2 + cellH/2;
-
+      offsetX = (canvas.width  - cols * cellW) / 2 + cellH / 2;
+      offsetY = (canvas.height - rows * cellH) / 2 + cellH / 2;
       const now = performance.now();
       grid       = Array.from({ length: rows }, () => Array.from({ length: cols }, () => rand()));
       nextChange = Array.from({ length: rows }, () => Array.from({ length: cols }, () => now + randMs()));
@@ -64,27 +68,43 @@
         for (let c = 0; c < cols; c++)
           ctx.fillText(grid[r][c], offsetX + c * cellW, offsetY + r * cellH);
     }
+
+    /* ── Audio ── */
     const audio = new AudioContext();
-    document.addEventListener('click', () => audio.resume(), { once: true });
+    const overlay = document.getElementById('overlay');
+
+    function start() {
+      audio.resume();
+      const buf = audio.createBuffer(1, 1, 22050);
+      const src = audio.createBufferSource();
+      src.buffer = buf;
+      src.connect(audio.destination);
+      src.start();
+      overlay.remove();
+      requestAnimationFrame(loop);
+    }
+
+    overlay.addEventListener('click',      start, { once: true });
+    overlay.addEventListener('touchstart', start, { once: true });
 
     function beep(col, row) {
-      const osc = audio.createOscillator();
+      const osc  = audio.createOscillator();
       const gain = audio.createGain();
       const pan  = audio.createStereoPanner();
-
       osc.connect(gain);
       gain.connect(pan);
       pan.connect(audio.destination);
-
       pan.pan.value = (col / cols) * 2 - 1;
-      osc.frequency.value = 200 + Math.random() * 500; // random pitch
+      osc.frequency.value = 200 + Math.random() * 500;
+      //const jitter = 0.9 + Math.random() * 0.2;
       //osc.frequency.value = minHz * Math.pow(maxHz / minHz, Math.pow(row / rows, 0.5)) * jitter;
       gain.gain.setValueAtTime(0.08, audio.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.1);
       osc.start();
       osc.stop(audio.currentTime + 0.1);
-}
+    }
 
+    /* ── Loop ── */
     function loop(now) {
       let changed = false;
       for (let r = 0; r < rows; r++) {
@@ -103,7 +123,6 @@
 
     resize();
     window.addEventListener('resize', resize);
-    requestAnimationFrame(loop);
   </script>
 </body>
 </html>
