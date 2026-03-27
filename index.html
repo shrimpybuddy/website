@@ -1,3 +1,4 @@
+//osc.frequency.value = 200 + Math.random() * 500;
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,8 +23,9 @@
 
   <canvas id="grid"></canvas>
   <script>
-    const canvas = document.getElementById('grid');
-    const ctx = canvas.getContext('2d');
+    const canvas  = document.getElementById('grid');
+    const ctx     = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
 
     const BANK   = 'OWENGRUNAU'.split('');
     const MIN_MS = 2000;
@@ -33,6 +35,7 @@
 
     let FONT_SIZE, FONT, cellW, cellH;
     let cols, rows, grid, nextChange, offsetX, offsetY;
+    let audio;
 
     function rand()   { return BANK[Math.floor(Math.random() * BANK.length)]; }
     function randMs() { return MIN_MS + Math.random() * (MAX_MS - MIN_MS); }
@@ -69,25 +72,8 @@
           ctx.fillText(grid[r][c], offsetX + c * cellW, offsetY + r * cellH);
     }
 
-    /* ── Audio ── */
-    const audio = new AudioContext();
-    const overlay = document.getElementById('overlay');
-
-    function start() {
-      audio.resume();
-      const buf = audio.createBuffer(1, 1, 22050);
-      const src = audio.createBufferSource();
-      src.buffer = buf;
-      src.connect(audio.destination);
-      src.start();
-      overlay.remove();
-      requestAnimationFrame(loop);
-    }
-
-    overlay.addEventListener('click',      start, { once: true });
-    overlay.addEventListener('touchstart', start, { once: true });
-
     function beep(col, row) {
+      if (!audio) return;
       const osc  = audio.createOscillator();
       const gain = audio.createGain();
       const pan  = audio.createStereoPanner();
@@ -95,16 +81,14 @@
       gain.connect(pan);
       pan.connect(audio.destination);
       pan.pan.value = (col / cols) * 2 - 1;
-      osc.frequency.value = 200 + Math.random() * 500;
-      //const jitter = 0.9 + Math.random() * 0.2;
-      //osc.frequency.value = minHz * Math.pow(maxHz / minHz, Math.pow(row / rows, 0.5)) * jitter;
+      const jitter = 0.9 + Math.random() * 0.2;
+      osc.frequency.value = minHz * Math.pow(maxHz / minHz, Math.pow(row / rows, 0.5)) * jitter;
       gain.gain.setValueAtTime(0.08, audio.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.1);
       osc.start();
       osc.stop(audio.currentTime + 0.1);
     }
 
-    /* ── Loop ── */
     function loop(now) {
       let changed = false;
       for (let r = 0; r < rows; r++) {
@@ -121,8 +105,22 @@
       requestAnimationFrame(loop);
     }
 
-    resize();
-    window.addEventListener('resize', resize);
+    function start() {
+      // AudioContext must be created inside the gesture on iOS
+      audio = new AudioContext();
+      const buf = audio.createBuffer(1, 1, 22050);
+      const src = audio.createBufferSource();
+      src.buffer = buf;
+      src.connect(audio.destination);
+      src.start();
+      overlay.remove();
+      resize();
+      window.addEventListener('resize', resize);
+      requestAnimationFrame(loop);
+    }
+
+    overlay.addEventListener('click',      start, { once: true });
+    overlay.addEventListener('touchstart', start, { once: true });
   </script>
 </body>
 </html>
